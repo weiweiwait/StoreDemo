@@ -45,3 +45,11 @@ func WithOcc(c *gin.Context) {
 	res := service.WithOccSecKill(gid)
 	c.JSON(res.Status, res)
 }
+
+// 使用管道
+
+func WithChannel(c *gin.Context) {
+	gid, _ := strconv.Atoi(c.Query("gid"))
+	res := service.WithChannelSecKill(gid)
+	c.JSON(res.Status, res)
+}
