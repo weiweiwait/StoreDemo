@@ -22,7 +22,10 @@ func NewRouter() *gin.Engine {
 		skGroup.GET("/with-lock", api.WithLock)
 		// 加锁(数据库悲观锁，查询加锁),超卖
 		skGroup.GET("/with-pcc-read", api.WithPccRead)
-
+		// 加锁(数据库悲观锁，更新限定), 正常
+		skGroup.GET("/with-pcc-update", api.WithPccUpdate)
+		// 加锁(数据库乐观锁，正常)
+		skGroup.GET("/with-occ", api.WithOcc)
 	}
 	return r
 }

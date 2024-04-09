@@ -37,3 +37,11 @@ func WithPccUpdate(c *gin.Context) {
 	res := service.WithPccUpdateSecKill(gid)
 	c.JSON(res.Status, res)
 }
+
+// 加锁(数据库乐观锁，正常)
+
+func WithOcc(c *gin.Context) {
+	gid, _ := strconv.Atoi(c.Query("gid"))
+	res := service.WithOccSecKill(gid)
+	c.JSON(res.Status, res)
+}
