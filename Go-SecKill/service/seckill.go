@@ -27,11 +27,13 @@ func InitializerSecKill(gid int) {
 }
 
 // 获取总共秒杀了多少商品
+
 func GetKilledCount(gid int) (int64, error) {
 	return model.GetKilledCountByGoodsId(gid)
 }
 
 // 不加锁减库存
+
 func WithoutLockSecKillGoods(gid, userID int) error {
 	tx := model.DB.Begin()
 	// 检查库存
@@ -99,6 +101,7 @@ func WithoutLockSecKill(gid int) serializer.Response {
 }
 
 // 枷锁处理库存
+
 func WithLockSecKillGoods(gid, userID int) error {
 	lock.Lock()
 	err := WithoutLockSecKillGoods(gid, userID)
@@ -114,6 +117,70 @@ func WithLockSecKill(gid int) serializer.Response {
 		userID := i
 		go func() {
 			err := WithLockSecKillGoods(gid, userID)
+			if err != nil {
+				code = e.ERROR
+				logging.Errorln("Error", err)
+			} else {
+				logging.Infof("User: %d seckill successfully.\n", userID)
+			}
+			wg.Done()
+		}()
+	}
+	wg.Wait()
+	kCount, err := GetKilledCount(gid)
+	if err != nil {
+		code = e.ERROR
+		logging.Infoln("Error")
+	}
+	logging.Infof("Total %v goods", kCount)
+	return serializer.Response{
+		Status: code,
+		Msg:    e.GetMsg(code),
+	}
+}
+
+//数据库加悲观锁
+
+func WithPccReadSecKillGoods(gid, userID int) error {
+	tx := model.DB.Begin()
+	count, err := model.SelectCountByGoodsIdPcc(gid)
+	// 先读后更新的数据竞争场景
+	if err != nil {
+		return err
+	}
+	if count > 0 {
+		// 1. 扣库存
+		err = model.ReduceStockByGoodsId(gid, int(count-1))
+		if err != nil {
+			tx.Rollback()
+			return err
+		}
+		// 2. 创建订单
+		kill := model.SuccessKilled{
+			GoodsId:    int64(gid),
+			UserId:     int64(userID),
+			State:      0,
+			CreateTime: time.Now(),
+		}
+		err = model.CreateOrder(kill)
+		if err != nil {
+			tx.Rollback()
+			return err
+		}
+	}
+	tx.Commit()
+	return nil
+}
+
+func WithPccReadSecKill(gid int) serializer.Response {
+	code := e.SUCCESS
+	seckillNum := 50
+	wg.Add(seckillNum)
+	InitializerSecKill(gid)
+	for i := 0; i < seckillNum; i++ {
+		userID := i
+		go func() {
+			err := WithPccReadSecKillGoods(gid, userID)
 			if err != nil {
 				code = e.ERROR
 				logging.Errorln("Error", err)
