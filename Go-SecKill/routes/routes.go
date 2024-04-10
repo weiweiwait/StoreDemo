@@ -36,6 +36,8 @@ func NewRouter() *gin.Engine {
 		skDisGroup.GET("/rush", func(c *gin.Context) {
 			c.JSON(200, "success")
 		})
+		// 基于redis的redission分布式,正常
+		skDisGroup.GET("/with-redission", api.WithRedission)
 	}
 	return r
 }
