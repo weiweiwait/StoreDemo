@@ -30,5 +30,12 @@ func NewRouter() *gin.Engine {
 		skGroup.GET("/with-channel", api.WithChannel)
 
 	}
+	// 分布式
+	skDisGroup := r.Group("/api/v2")
+	{
+		skDisGroup.GET("/rush", func(c *gin.Context) {
+			c.JSON(200, "success")
+		})
+	}
 	return r
 }
