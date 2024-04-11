@@ -11,9 +11,12 @@ import (
 	"fmt"
 	"github.com/coreos/etcd/clientv3"
 	"github.com/go-redis/redis"
+	"github.com/segmentio/kafka-go"
 	logging "github.com/sirupsen/logrus"
+	"log"
 	"math/rand"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -269,4 +272,91 @@ func WithRedisList(gid int) serializer.Response {
 		Status: code,
 		Msg:    e.GetMsg(code),
 	}
+}
+
+// 使用kafka
+func SendSecKillOrderToKafka(gid, userID int) {
+	topic := "seckill"
+	partition := 0
+
+	conn, err := kafka.DialLeader(context.Background(), "tcp", "localhost:9092", topic, partition)
+	if err != nil {
+		log.Fatalf("Failed to connect to kafka: %v", err)
+	}
+	defer conn.Close()
+
+	orderMsg := fmt.Sprintf("gid:%d,userID:%d", gid, userID)
+	_, err = conn.WriteMessages(
+		kafka.Message{Value: []byte(orderMsg)},
+	)
+	if err != nil {
+		log.Fatalf("Failed to send message to kafka: %v", err)
+	}
+}
+func ConsumeSecKillOrdersFromKafka(gid int) serializer.Response {
+	code := e.SUCCESS
+	seckillNum := 50
+	wg.Add(seckillNum)
+	InitializerSecKill(gid)
+	g := strconv.Itoa(gid)
+	for i := 0; i < seckillNum; i++ {
+		cache.RedisClient.LPush(g, g)
+	}
+	for i := 0; i < seckillNum; i++ {
+		userID := i
+		go func() {
+			SendSecKillOrderToKafka(gid, userID)
+			wg.Done()
+		}()
+	}
+	wg.Wait()
+	topic := "seckill"
+	partition := 0
+
+	conn, err := kafka.DialLeader(context.Background(), "tcp", "localhost:9092", topic, partition)
+	if err != nil {
+		log.Fatalf("Failed to connect to kafka: %v", err)
+	}
+	defer conn.Close()
+
+	batch := conn.ReadBatch(10e3, 1e6)
+
+	b := make([]byte, 10e3)
+	for {
+		n, err := batch.Read(b)
+		if err != nil {
+			break
+		}
+
+		orderMsg := string(b[:n])
+		s := strings.Split(orderMsg, ",")
+		gidStr := strings.Split(s[0], ":")[1]
+		userIDStr := strings.Split(s[1], ":")[1]
+		gid, _ := strconv.Atoi(gidStr)
+		userID, _ := strconv.Atoi(userIDStr)
+
+		err = WithRedisListSecKillGoods(gid, userID)
+		if err != nil {
+			log.Printf("SecKill failed for gid=%d, userID=%d: %v", gid, userID, err)
+		} else {
+			log.Printf("SecKill succeeded for gid=%d, userID=%d", gid, userID)
+		}
+	}
+
+	err = batch.Close()
+	if err != nil {
+		log.Fatalf("Failed to close batch: %v", err)
+	}
+	_ = AfterRedisListSecKill(gid)
+	kCount, err := GetKilledCount(gid)
+	if err != nil {
+		code = e.ERROR
+		logging.Infoln("Error")
+	}
+	logging.Infof("Total %v goods", kCount)
+	return serializer.Response{
+		Status: code,
+		Msg:    e.GetMsg(code),
+	}
+
 }

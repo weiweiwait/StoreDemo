@@ -42,6 +42,8 @@ func NewRouter() *gin.Engine {
 		skDisGroup.GET("/with-etcd", api.WithETCD)
 		// 基于redis的List, 正常
 		skDisGroup.GET("/with-redis-list", api.WithRedisList)
+		// 基于kafka解耦，提高性能
+		skDisGroup.GET("/with-kafka-redis-list", api.WithKafka)
 	}
 	return r
 }

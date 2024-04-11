@@ -29,3 +29,10 @@ func WithRedisList(c *gin.Context) {
 	res := service.WithRedisList(gid)
 	c.JSON(res.Status, res)
 }
+
+// 基于kafka以及redisList的秒杀
+func WithKafka(c *gin.Context) {
+	gid, _ := strconv.Atoi(c.Query("gid"))
+	res := service.ConsumeSecKillOrdersFromKafka(gid)
+	c.JSON(res.Status, res)
+}
